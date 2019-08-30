@@ -50,12 +50,12 @@ impl Rational {
 
     #[inline]
     pub fn zero() -> Self {
-        Rational::with_numerator(0)
+        0.into()
     }
 
     #[inline]
     pub fn one() -> Self {
-        Rational::with_numerator(1)
+        1.into()
     }
 
     #[inline]
