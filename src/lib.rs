@@ -383,7 +383,7 @@ mod tests {
         if n <= one {
             return one;
         }
-        n * fact(n - 1)
+        n.clone() * fact(n - 1)
     }
 
     #[test]
