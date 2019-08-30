@@ -11,6 +11,9 @@ use num_traits::pow::Pow;
 #[cfg(not(feature = "use_bigint"))]
 type Integer = i64;
 
+#[cfg(not(feature = "use_bigint"))]
+pub const MAX: Integer = std::i64::MAX;
+
 macro_rules! ensure_non_zero_division {
     ($x:expr) => {
         debug_assert!($x != 0.into(), "cannot divide by zero!");
