@@ -1,4 +1,5 @@
 use std::mem;
+use std::cmp::Ordering;
 use std::ops::{Add, Sub, Mul, Div, Neg, AddAssign, SubAssign, MulAssign, DivAssign, BitXor};
 
 #[cfg(feature = "use_bigint")]
@@ -58,39 +59,109 @@ impl Rational {
     }
 
     #[inline]
-    pub fn inverted(mut self) -> Self {
+    pub fn invert(mut self) -> Self {
         ensure_non_zero_division!(self.numerator);
         mem::swap(&mut self.numerator, &mut self.denominator);
         self
     }
-}
 
-fn gcd(a: Integer, b: Integer) -> Integer {
-    let (mut a, mut b) = if a > b {
-        (a, b)
-    } else {
-        (b, a)
-    };
-
-    while b != 0.into() {
-        let r = a % &b;
-        a = b;
-        b = r;
+    pub fn pow(mut self, exponent: i32) -> Self {
+        if exponent >= 0 {
+            let exponent = exponent as u32;
+            self.numerator = self.numerator.pow(exponent);
+            self.denominator = self.denominator.pow(exponent);
+            self
+        } else {
+            self.invert() ^ -exponent
+        }
     }
-
-    a
 }
 
-fn simplify_fraction(numerator: Integer, denominator: Integer) -> (Integer, Integer) {
-    let d = gcd(numerator.clone(), denominator.clone());
+impl PartialOrd for Rational {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let n1 = self.numerator.clone() * other.denominator.clone();
+        let n2 = other.numerator.clone() * self.denominator.clone();
 
-    let numerator = numerator / &d;
-    let denominator = denominator / &d;
-
-    (numerator, denominator)
+        n1.partial_cmp(&n2)
+    }
 }
 
-trait IntoRational {
+impl Neg for Rational {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        Rational {
+            numerator: -self.numerator,
+            denominator: self.denominator,
+        }
+    }
+}
+
+impl Add for Rational {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self::Output {
+        let n1 = self.numerator * other.denominator.clone();
+        let n2 = other.numerator * self.denominator.clone();
+
+        let d = self.denominator * other.denominator;
+
+        Rational::new(n1 + n2, d)
+    }
+}
+
+impl AddAssign for Rational {
+    fn add_assign(&mut self, other: Self) {
+        *self = self.clone() + other;
+    }
+}
+
+impl Sub for Rational {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self::Output {
+        self + other.neg()
+    }
+}
+
+impl SubAssign for Rational {
+    fn sub_assign(&mut self, other: Self) {
+        *self = self.clone() - other;
+    }
+}
+
+impl Mul for Rational {
+    type Output = Self;
+
+    fn mul(self, other: Self) -> Self::Output {
+        let n = self.numerator * other.numerator;
+        let d = self.denominator * other.denominator;
+
+        Rational::new(n, d)
+    }
+}
+
+impl MulAssign for Rational {
+    fn mul_assign(&mut self, other: Self) {
+        *self = self.clone() * other;
+    }
+}
+
+impl Div for Rational {
+    type Output = Self;
+
+    fn div(self, other: Self) -> Self::Output {
+        self * other.invert()
+    }
+}
+
+impl DivAssign for Rational {
+    fn div_assign(&mut self, other: Self) {
+        *self = self.clone() / other;
+    }
+}
+
+pub trait IntoRational {
     fn into_rational(self) -> Rational;
 }
 
@@ -112,15 +183,64 @@ macro_rules! impls_for_integers {
             impl BitXor<$t> for Rational {
                 type Output = Self;
 
-                fn bitxor(mut self, exponent: $t) -> Self::Output {
-                    if exponent >= 0 {
-                        let exponent = exponent as u32;
-                        self.numerator = self.numerator.pow(exponent);
-                        self.denominator = self.denominator.pow(exponent);
-                        self
-                    } else {
-                        self.inverted() ^ -exponent
-                    }
+                fn bitxor(self, exponent: $t) -> Self::Output {
+                    self.pow(exponent as i32)
+                }
+            }
+
+            impl Add<$t> for Rational {
+                type Output = Self;
+
+                fn add(self, other: $t) -> Self::Output {
+                    self.add(other.into_rational())
+                }
+            }
+
+            impl AddAssign<$t> for Rational {
+                fn add_assign(&mut self, other: $t) {
+                    self.add_assign(other.into_rational())
+                }
+            }
+
+            impl Sub<$t> for Rational {
+                type Output = Self;
+
+                fn sub(self, other: $t) -> Self::Output {
+                    self.sub(other.into_rational())
+                }
+            }
+
+            impl SubAssign<$t> for Rational {
+                fn sub_assign(&mut self, other: $t) {
+                    self.sub_assign(other.into_rational())
+                }
+            }
+
+            impl Mul<$t> for Rational {
+                type Output = Self;
+
+                fn mul(self, other: $t) -> Self::Output {
+                    self.mul(other.into_rational())
+                }
+            }
+
+            impl MulAssign<$t> for Rational {
+                fn mul_assign(&mut self, other: $t) {
+                    self.mul_assign(other.into_rational())
+                }
+            }
+
+            impl Div<$t> for Rational {
+                type Output = Self;
+
+                fn div(self, other: $t) -> Self::Output {
+                    self.div(other.into_rational())
+                }
+            }
+
+            impl DivAssign<$t> for Rational {
+                fn div_assign(&mut self, other: $t) {
+                    self.div_assign(other.into_rational())
                 }
             }
         )*
@@ -129,103 +249,40 @@ macro_rules! impls_for_integers {
 
 impls_for_integers!(i8, i16, i32, i64);
 
-impl Neg for Rational {
-    type Output = Self;
+fn gcd(a: Integer, b: Integer) -> Integer {
+    let (mut a, mut b) = if a > b {
+        (a, b)
+    } else {
+        (b, a)
+    };
 
-    fn neg(self) -> Self::Output {
-        let Rational { numerator, denominator } = self;
-        let numerator = -numerator;
-        Rational { numerator, denominator }
+    while b != 0.into() {
+        let r = a % &b;
+        a = b;
+        b = r;
     }
+
+    a
 }
 
-macro_rules! add_with {
-    ($a:expr, $b:expr, $op:tt) => {
-        {
-            let Rational { numerator: n1, denominator: d1 } = $a;
-            let Rational { numerator: n2, denominator: d2 } = $b;
+fn simplify_fraction(numerator: Integer, denominator: Integer) -> (Integer, Integer) {
+    let d = gcd(numerator.clone(), denominator.clone());
 
-            let numerator = n1 * &d2 $op n2 * &d1;
-            let denominator = d1 * d2;
+    let mut numerator = numerator / &d;
+    let mut denominator = denominator / &d;
 
-            Rational::new(numerator, denominator)
-        }
+    // ensure that the numerator is always holding the fraction's sign
+    if denominator < 0.into() {
+        denominator = -denominator;
+        numerator = -numerator;
     }
-}
 
-impl Add for Rational {
-    type Output = Self;
-
-    fn add(self, other: Self) -> Self::Output {
-        add_with!(self, other, +)
-    }
-}
-
-impl AddAssign for Rational {
-    fn add_assign(&mut self, other: Self) {
-        *self = self.clone() + other;
-    }
-}
-
-impl Sub for Rational {
-    type Output = Self;
-
-    fn sub(self, other: Self) -> Self::Output {
-        add_with!(self, other, -)
-    }
-}
-
-impl SubAssign for Rational {
-    fn sub_assign(&mut self, other: Self) {
-        *self = self.clone() - other;
-    }
-}
-
-macro_rules! mul_with {
-    ($a:expr, $b:expr, $op:tt) => {
-        {
-            let Rational { numerator: n1, denominator: d1 } = $a;
-            let Rational { numerator: n2, denominator: d2 } = $b;
-
-            let numerator = n1 $op n2;
-            let denominator = d1 $op d2;
-
-            Rational::new(numerator, denominator)
-        }
-    }
-}
-
-impl Mul for Rational {
-    type Output = Self;
-
-    fn mul(self, other: Self) -> Self::Output {
-        mul_with!(self, other, *)
-    }
-}
-
-impl MulAssign for Rational {
-    fn mul_assign(&mut self, other: Self) {
-        *self = self.clone() * other;
-    }
-}
-
-impl Div for Rational {
-    type Output = Self;
-
-    fn div(self, other: Self) -> Self::Output {
-        ensure_non_zero_division!(other.denominator);
-        mul_with!(self, other, /)
-    }
-}
-
-impl DivAssign for Rational {
-    fn div_assign(&mut self, other: Self) {
-        *self = self.clone() / other;
-    }
+    (numerator, denominator)
 }
 
 #[cfg(test)]
 mod tests {
+    use more_asserts::*;
     use super::*;
 
     #[test]
@@ -234,11 +291,44 @@ mod tests {
         assert_eq!(2.into_rational() - 2.into_rational(), 0.into_rational());
         assert_eq!(2.into_rational() * 2.into_rational(), 4.into_rational());
         assert_eq!(2.into_rational() / 2.into_rational(), 1.into_rational());
+
+        assert_eq!(2.into_rational() + 2, 4.into_rational());
+        assert_eq!(2.into_rational() - 2, 0.into_rational());
+        assert_eq!(2.into_rational() * 2, 4.into_rational());
+        assert_eq!(2.into_rational() / 2, 1.into_rational());
+
+        // only RHS version is available
+        //
+        // assert_eq!(2 + 2.into_rational(), 4.into_rational());
+        // assert_eq!(2 - 2.into_rational(), 0.into_rational());
+        // assert_eq!(2 * 2.into_rational(), 4.into_rational());
+        // assert_eq!(2 / 2.into_rational(), 1.into_rational());
+    }
+
+    #[test]
+    fn division_by_integer() {
+        assert_eq!(2.into_rational() / 3, Rational::new(2, 3));
+    }
+
+    #[test]
+    fn sign() {
+        assert_eq!(Rational::new(1, 1), Rational::new(-1, -1));
+        assert_eq!(Rational::new(-1, 1), Rational::new(1, -1));
     }
 
     #[test]
     fn equality() {
+        assert_eq!(1.into_rational(), 1.into_rational());
         assert_ne!(2.into_rational(), 3.into_rational());
+        assert_eq!(0.into_rational() / 3, 0.into_rational() / 4);
+        assert_eq!(0.into_rational(), -0.into_rational());
+    }
+
+    #[test]
+    fn comparison() {
+        assert_lt!(2.into_rational(), 3.into_rational());
+        assert_lt!(2.into_rational() / 3, 3.into_rational() / 4);
+        assert_le!(1.into_rational(), 1.into_rational());
     }
 
     #[test]
@@ -250,7 +340,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn zero_cannot_be_inverted() {
-        let _ = Rational::new(0, 1).inverted();
+        let _ = Rational::new(0, 1).invert();
     }
 
     #[test]
@@ -284,5 +374,24 @@ mod tests {
         assert_eq!(std::i16::MAX as u32, (std::u16::MAX >> 1) as u32);
         assert_eq!(std::i32::MAX as u32, (std::u32::MAX >> 1) as u32);
         assert_eq!(std::i64::MAX as u32, (std::u64::MAX >> 1) as u32);
+    }
+
+    fn fact<T: Into<Rational>>(n: T) -> Rational {
+        let n: Rational = n.into();
+        //println!("factorial({:?})", &n);
+        let one = Rational::one();
+        if n <= one {
+            return one;
+        }
+        n * fact(n - 1)
+    }
+
+    #[test]
+    fn factorial() {
+        assert_eq!(fact(0), 1.into());
+        assert_eq!(fact(1), 1.into());
+        assert_eq!(fact(2), 2.into());
+        assert_eq!(fact(3), 6.into());
+        assert_eq!(fact(4), 24.into());
     }
 }
