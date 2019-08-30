@@ -4,8 +4,66 @@ use std::ops::{Add, Sub, Mul, Div, Neg, AddAssign, SubAssign, MulAssign, DivAssi
 #[cfg(feature = "use_bigint")]
 type Integer = num_bigint::BigInt;
 
+#[cfg(feature = "use_bigint")]
+use num_traits::pow::Pow;
+
 #[cfg(not(feature = "use_bigint"))]
 type Integer = i64;
+
+macro_rules! ensure_non_zero_division {
+    ($x:expr) => {
+        debug_assert!($x != 0.into(), "cannot divide by zero!");
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(not(feature = "use_bigint"), derive(Copy))]
+pub struct Rational {
+    numerator: Integer,
+    denominator: Integer,
+}
+
+impl Rational {
+    pub fn new<T, U>(numerator: T, denominator: U) -> Self
+        where T: Into<Integer>,
+              U: Into<Integer>,
+    {
+        let numerator = numerator.into();
+        let denominator = denominator.into();
+
+        ensure_non_zero_division!(denominator);
+
+        let (numerator, denominator) = simplify_fraction(numerator, denominator);
+
+        Rational { numerator, denominator }
+    }
+
+    pub fn with_numerator<T>(numerator: T) -> Self
+        where T: Into<Integer>,
+    {
+        let numerator = numerator.into();
+        let denominator = 1.into();
+
+        Rational { numerator, denominator }
+    }
+
+    #[inline]
+    pub fn zero() -> Self {
+        Rational::with_numerator(0)
+    }
+
+    #[inline]
+    pub fn one() -> Self {
+        Rational::with_numerator(1)
+    }
+
+    #[inline]
+    pub fn inverted(mut self) -> Self {
+        ensure_non_zero_division!(self.numerator);
+        mem::swap(&mut self.numerator, &mut self.denominator);
+        self
+    }
+}
 
 fn gcd(a: Integer, b: Integer) -> Integer {
     let (mut a, mut b) = if a > b {
@@ -32,47 +90,6 @@ fn simplify_fraction(numerator: Integer, denominator: Integer) -> (Integer, Inte
     (numerator, denominator)
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct Rational {
-    numerator: Integer,
-    denominator: Integer,
-}
-
-impl Rational {
-    pub fn new<T, U>(numerator: T, denominator: U) -> Self
-        where T: Into<Integer>,
-              U: Into<Integer>,
-    {
-        let numerator = numerator.into();
-        let denominator = denominator.into();
-
-        assert!(denominator != 0.into(), "denominator can not be zero!");
-
-        let (numerator, denominator) = simplify_fraction(numerator, denominator);
-
-        Rational { numerator, denominator }
-    }
-
-    pub fn with_numerator<T>(numerator: T) -> Self
-        where T: Into<Integer>,
-    {
-        let numerator = numerator.into();
-        let denominator = 1.into();
-
-        Rational { numerator, denominator }
-    }
-
-    #[inline]
-    pub fn zero() -> Self {
-        Rational::with_numerator(0)
-    }
-
-    #[inline]
-    pub fn one() -> Self {
-        Rational::with_numerator(1)
-    }
-}
-
 trait IntoRational {
     fn into_rational(self) -> Rational;
 }
@@ -97,14 +114,12 @@ macro_rules! impls_for_integers {
 
                 fn bitxor(mut self, exponent: $t) -> Self::Output {
                     if exponent >= 0 {
-                        let exponent = exponent as u32; // TODO panic if value doesn't fit
+                        let exponent = exponent as u32;
                         self.numerator = self.numerator.pow(exponent);
                         self.denominator = self.denominator.pow(exponent);
                         self
                     } else {
-                        assert!(self.numerator != 0.into(), "cannot invert zero!");
-                        mem::swap(&mut self.numerator, &mut self.denominator);
-                        self ^ -exponent
+                        self.inverted() ^ -exponent
                     }
                 }
             }
@@ -198,6 +213,7 @@ impl Div for Rational {
     type Output = Self;
 
     fn div(self, other: Self) -> Self::Output {
+        ensure_non_zero_division!(other.denominator);
         mul_with!(self, other, /)
     }
 }
@@ -226,6 +242,24 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
+    fn cannot_have_zero_denominator() {
+        let _ = Rational::new(1, 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn zero_cannot_be_inverted() {
+        let _ = Rational::new(0, 1).inverted();
+    }
+
+    #[test]
+    #[should_panic]
+    fn cannot_divide_by_zero() {
+        let _ = Rational::one() / Rational::zero();
+    }
+
+    #[test]
     fn simplification() {
         let a = Rational::new(2, 3);
         let b = Rational::new(4, 6);
@@ -242,5 +276,13 @@ mod tests {
         assert_eq!(2.into_rational() ^ 2, Rational::new(4, 1));
         assert_eq!(2.into_rational() ^ -2, Rational::new(1, 4));
         assert_eq!(42.into_rational() ^ 0, Rational::one());
+    }
+
+    #[test]
+    fn integer_conversions_are_lossless() {
+        assert_eq!(std::i8::MAX as u32,  (std::u8::MAX  >> 1) as u32);
+        assert_eq!(std::i16::MAX as u32, (std::u16::MAX >> 1) as u32);
+        assert_eq!(std::i32::MAX as u32, (std::u32::MAX >> 1) as u32);
+        assert_eq!(std::i64::MAX as u32, (std::u64::MAX >> 1) as u32);
     }
 }

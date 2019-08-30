@@ -1,5 +1,5 @@
 [package]
-name = "exact-numbers"
+name = "rationals"
 version = "0.1.0"
 authors = ["Jean-Marie Comets <jean.marie.comets@gmail.com>"]
 edition = "2018"
@@ -8,7 +8,8 @@ edition = "2018"
 
 [dependencies]
 num-bigint = { version = "0.2.2", optional = true }
+num-traits = { version = "0.2.8", optional = true }
 
 [features]
 default = []
-use_bigint = ["num-bigint"]
+use_bigint = ["num-bigint", "num-traits"]
