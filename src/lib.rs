@@ -379,22 +379,22 @@ mod tests {
         assert_eq!(std::i64::MAX as u32, (std::u64::MAX >> 1) as u32);
     }
 
-    fn fact<T: Into<Rational>>(n: T) -> Rational {
+    fn factorial<T: Into<Rational>>(n: T) -> Rational {
         let n: Rational = n.into();
         //println!("factorial({:?})", &n);
         let one = Rational::one();
         if n <= one {
             return one;
         }
-        n.clone() * fact(n - 1)
+        n.clone() * factorial(n - 1)
     }
 
     #[test]
-    fn factorial() {
-        assert_eq!(fact(0), 1.into());
-        assert_eq!(fact(1), 1.into());
-        assert_eq!(fact(2), 2.into());
-        assert_eq!(fact(3), 6.into());
-        assert_eq!(fact(4), 24.into());
+    fn factorial_numbers_up_to_4() {
+        assert_eq!(factorial(0), 1.into());
+        assert_eq!(factorial(1), 1.into());
+        assert_eq!(factorial(2), 2.into());
+        assert_eq!(factorial(3), 6.into());
+        assert_eq!(factorial(4), 24.into());
     }
 }
