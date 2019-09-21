@@ -1,5 +1,6 @@
-use std::mem;
 use std::cmp::Ordering;
+use std::fmt;
+use std::mem;
 use std::ops::{Add, Sub, Mul, Div, Neg, AddAssign, SubAssign, MulAssign, DivAssign, BitXor};
 
 #[cfg(feature = "use_bigint")]
@@ -167,6 +168,17 @@ impl Div for Rational {
 impl DivAssign for Rational {
     fn div_assign(&mut self, other: Self) {
         *self = self.clone() / other;
+    }
+}
+
+impl fmt::Debug for Rational {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        self.numerator.fmt(f)?;
+        if self.denominator != 1.into() {
+            f.write_str("/")?;
+            self.denominator.fmt(f)?;
+        }
+        Ok(())
     }
 }
 
