@@ -20,7 +20,7 @@ macro_rules! ensure_non_zero_division {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(not(feature = "use_bigint"), derive(Copy))]
 pub struct Rational {
     numerator: Integer,
@@ -80,12 +80,18 @@ impl Rational {
     }
 }
 
-impl PartialOrd for Rational {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+impl Ord for Rational {
+    fn cmp(&self, other: &Self) -> Ordering {
         let n1 = self.numerator.clone() * other.denominator.clone();
         let n2 = other.numerator.clone() * self.denominator.clone();
 
-        n1.partial_cmp(&n2)
+        n1.cmp(&n2)
+    }
+}
+
+impl PartialOrd for Rational {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
