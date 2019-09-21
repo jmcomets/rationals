@@ -79,6 +79,14 @@ impl Rational {
             self.invert() ^ -exponent
         }
     }
+
+    pub fn abs(self) -> Self {
+        if self.numerator < 0.into() {
+            self.neg()
+        } else {
+            self
+        }
+    }
 }
 
 impl Ord for Rational {
